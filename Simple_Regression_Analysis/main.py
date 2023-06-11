@@ -22,9 +22,6 @@ print(training_data)
 x = [d[0] for d in training_data]  # temperature
 y = [d[1] for d in training_data]  # ice_cream_sales
 
-# 散布図のプロット
-plt.scatter(x, y, color='green')
-
 #トレーニングデータをトレーニングセットとテストセットに分割
 training_data_set, test_data_set = train_test_split(training_data, test_size=0.2, random_state=42)
 print("Training Dataset:")
@@ -60,6 +57,8 @@ predicted = np.dot(X_test.reshape(-1, 1), w) + b  # すべてのテストデー�
 for i in range(len(X_test)):
     print("温度: {:.2f}  ->  予測売上金額: {:.2f}".format(X_test[i], predicted[i]))
 
+# 散布図のプロット
+plt.scatter(x, y, color='green')
 # 線形回帰直線のプロット
 plt.plot(X_test, predicted.flatten(), color='red', label='Linear Regression')
 plt.scatter(X_test, y_test, color='yellow', label='Actual Test Data')
