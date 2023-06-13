@@ -29,7 +29,7 @@ def split_training_and_test(training_data):
     return training_data_set, test_data_set
 
 # 説明変数と目的変数の分割
-def aplit_Exv_and_Tgv(training_data_set):
+def split_Exv_and_Tgv(training_data_set):
     X_train = training_data_set[:, 0]  # 温度（説明変数）
     Y_train = training_data_set[:, 1]  # 売上金額（目的変数）
     return X_train, Y_train
@@ -87,7 +87,7 @@ if __name__ == "__main__":
     print(training_data_set)
     print("\nTest Dataset:")
     print(test_data_set)
-    X_train, Y_train = aplit_Exv_and_Tgv(training_data_set)
+    X_train, Y_train = split_Exv_and_Tgv(training_data_set)
     print(X_train)
     print(type(X_train))
     model = model_studying(X_train, Y_train)
