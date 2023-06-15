@@ -1,4 +1,5 @@
 import numpy as np
+from sklearn.linear_model import LinearRegression
 from sklearn.model_selection import train_test_split
 import csv
 
@@ -33,6 +34,11 @@ def split_data(training_data):
 def split_training_and_test(training_data):
     training_data_set, test_data_set = train_test_split(training_data, test_size=0.2, random_state=42)
     return training_data_set, test_data_set
+
+#モデルの作成と学習
+def model_studying(training_data_set, test_data_set):
+    model_as_2_Explanatory = LinearRegression()
+
 
 if __name__ == "__main__":
     training_data = create_dataset()
