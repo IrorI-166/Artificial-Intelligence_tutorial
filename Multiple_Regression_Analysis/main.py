@@ -114,7 +114,7 @@ def get_IndV2model_result(IndV2_Xtest, IndV2_w, IndV2_b):
     print("予測結果:")
     IndV2_predicted = np.dot(IndV2_Xtest.reshape(-1, 1), IndV2_w) + IndV2_b
     for i in range(len(IndV2_Xtest)):
-        print("風力: {:.2f}\n温度: {:.2f}->  予測日射量: {:.2f}".format(IndV2_Xtest[i], predicted[i]))
+        print("風力: {:.2f}\n温度: {:.2f}->  予測日射量: {:.2f}".format(IndV2_Xtest[i], IndV2_predicted[i]))
     return IndV2_predicted
 
 if __name__ == "__main__":
