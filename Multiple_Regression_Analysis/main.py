@@ -1,6 +1,7 @@
 import numpy as np
 from sklearn.linear_model import LinearRegression
 from sklearn.model_selection import train_test_split
+from sklearn.impute import SimpleImputer
 import csv
 
 #データセットの読み込み、必要データの抽出
@@ -9,15 +10,39 @@ def create_dataset():
         reader = csv.reader(data, delimiter=" ")
         next(reader)
         training_data = []
+        ozone_values = []
+        solor_values = []
+        wind_values = []
+        temperature_values = []
+        mounth_values = []
+        day_values = []
+
         for row in reader:
-            Ozone = int(row[1]) if row[1] != "NA" else None
-            Solor = int(row[2]) if row[2] != "NA" else None
-            Wind = float(row[3]) if row[3] != "NA" else None
-            Temperature = int(row[4]) if row[4] != "NA" else None
-            Mounth = int(row[5]) if row[5] != "NA" else None
-            Day = int(row[6]) if row[6] != "NA" else None
+            Ozone = int(row[1]) if row[1] != "NA" else np.nan
+            Solor = int(row[2]) if row[2] != "NA" else np.nan
+            Wind = float(row[3]) if row[3] != "NA" else np.nan
+            Temperature = int(row[4]) if row[4] != "NA" else np.nan
+            Mounth = int(row[5]) if row[5] != "NA" else np.nan
+            Day = int(row[6]) if row[6] != "NA" else np.nan
+
+            ozone_values.append(Ozone)
+            solor_values.append(Solor)
+            wind_values.append(Wind)
+            temperature_values.append(Temperature)
+            mounth_values.append(Mounth)
+            day_values.append(Day)
+
             training_data.append([Ozone, Solor, Wind, Temperature, Mounth, Day])
+
+    imputer = SimpleImputer(strategy='mean')
     training_data = np.array(training_data)
+    training_data[:, 0] = imputer.fit_transform(np.array(ozone_values).reshape(-1, 1)).flatten()
+    training_data[:, 1] = imputer.fit_transform(np.array(solor_values).reshape(-1, 1)).flatten()
+    training_data[:, 2] = imputer.fit_transform(np.array(wind_values).reshape(-1, 1)).flatten()
+    training_data[:, 3] = imputer.fit_transform(np.array(temperature_values).reshape(-1, 1)).flatten()
+    training_data[:, 4] = imputer.fit_transform(np.array(mounth_values).reshape(-1, 1)).flatten()
+    training_data[:, 5] = imputer.fit_transform(np.array(day_values).reshape(-1, 1)).flatten()
+
     return training_data
 
 #トレーニングデータをトレーニングセットとテストセットに分割
