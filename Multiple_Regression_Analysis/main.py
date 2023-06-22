@@ -1,7 +1,7 @@
 import numpy as np
 from sklearn.linear_model import LinearRegression
 from sklearn.model_selection import train_test_split
-from sklearn.impute import SimpleImputer
+import matplotlib.pyplot as plt
 
 # 科学的表記を通常の浮動小数点表記に変更
 np.set_printoptions(suppress=True)
@@ -61,19 +61,23 @@ def model_fit(X_train, Y_train_disease_progression):
     return model
 
 #モデルの学習(Numpy)
+#Numpyによる重回帰分析の実装方法が不明なため、コメントアウトとして残す
+"""
 def moddel_study(X_train, Y_train_disease_progression):
     slope, intercept = np.polyfit(X_train.flatten(), Y_train_disease_progression, 11)
     w = np.array([slope])
     b = intercept
     return w, b
+"""
 
 #モデルから予測値を出す(Numpy)
-def get_result(X_test, w, b):
-    print("予測結果:")
-    predicted = np.dot(X_test.reshape(-1, 1), w) + b  # すべてのテストデータに対して予測を計算
-    for i in range(len(X_test)):
-        print("温度: {:.2f}  ->  予測売上金額: {:.2f}".format(X_test[i], predicted[i]))
+def get_result(model, X_test):
+    predicted = model.predict(X_test) # すべてのテストデータに対して予測を計算
     return predicted
+
+#グラフの描画
+def plot_graph(X_test, Y_test_disease_progression, predicted):
+    plt.plot(X_test, predicted.flatten(), color='red', label='Linear Regression')
 
 if __name__ == "__main__":
     training_data = create_dataset()
@@ -86,5 +90,11 @@ if __name__ == "__main__":
     print("test_data_set :")
     print(test_data_set)
 
-    X_train, Y_train_disease_progression = Set_IndV_and_DepV(training_data_set)
+    X_train, Y_train_disease_progression, X_test, Y_test_disease_progression = Set_IndV_and_DepV(training_data_set)
     print(f"X_train\t:\n{X_train}\nY_train_disease_progression\t:\n{Y_train_disease_progression}")
+
+    model = model_fit(X_train, Y_train_disease_progression)
+    print(f"model\t:\t{model}")
+
+    predicted = get_result(model, X_test)
+    print(f"predicted\t:\n{predicted}")
