@@ -1,11 +1,14 @@
 # Artificial-Intelligence_tutorial
-This is a tutorial of "AI".
+これはAIおよびデータサイエンスの基礎から応用までを、IrorIが勉強しながら解説を記述するリポジトリです。
+誰でも解説を修正することが可能です。何か間違い等ありましたら是非ご協力お願いします。
 
-# Purpose
-Summarize in an easy-to-understand manner the actions related to the calculation part of AI that cannot be understood even after researching
+# 目的
+AIの仕組みを学びたいのに全然分からない！といった初学者の方や、プログラミングのことについてはある程度分かるけどscikit-learn等ライブラリを用いて実装するAIでは計算の中身がブラックボックス化してしまうからいやだ！といった方向けに、モデル学習の計算部分も交えた解説を記述すること。
 
-## About directory structure
-Separate each model, including simple regression analysis, into folders, and include learning data and source files for each AI model in them.
-In addition, prepare each Markdown file for each model folder, and describe detailed explanations for each model there.
+## ディレクトリ構成について
+単回帰分析を含む各モデルをフォルダーに分け、その中にAIモデルごとの学習データやソースファイルを含めます。
+また、モデルフォルダごとにMarkdownファイルを用意し、そこにモデルごとの詳しい説明を記述します。
 
 ### Bramch rule is Branch rules comply with GitHub Flow
+解説の修正やソースコードの編集などを行う際、mainブランチへの直接のpushは受け付けません。
+新規ブランチへpushしたものをmergeする形でソースコードをレビューします。
