@@ -77,8 +77,29 @@ def get_result(model, X_test):
 
 #グラフの描画
 def plot_graph(X_test, Y_test_disease_progression, predicted):
-    plt.plot(X_test, predicted.flatten(), color='red', label='Linear Regression')
+    # グラフの範囲を設定
+    x_min = min(X_test.flatten())
+    x_max = max(X_test.flatten())
 
+    # 直線の式を作成
+    coefficients =model.coef_
+    intercept = model.intercept_
+    x = np.linspace(x_min, x_max, 10).reshape(-1, 1)
+    y = intercept + np.dot(x, coefficients)
+    # グラフを描画
+    plt.plot(x, y, color='red', label='Linear Regression')
+    plt.xlabel('X')
+    plt.ylabel('Y')
+    plt.legend()
+    plt.show()
+"""
+    plt.scatter(Y_test_disease_progression, predicted.flatten(), color="yellow", label="Multiple Linear Regression")
+    plt.xlabel("Actual Test Data")
+    plt.ylabel("Predicte Data")
+    plt.title("Multiple Linear Regression")
+    plt.legend()
+    plt.show()
+"""
 if __name__ == "__main__":
     training_data = create_dataset()
     print("training_data :")
@@ -98,3 +119,13 @@ if __name__ == "__main__":
 
     predicted = get_result(model, X_test)
     print(f"predicted\t:\n{predicted}")
+
+    # 回帰係数の表示
+    print("回帰係数:")
+    print(model.coef_)
+
+    # 切片の表示
+    print("切片:")
+    print(model.intercept_)
+
+    plot_graph(X_test, Y_test_disease_progression, predicted)
