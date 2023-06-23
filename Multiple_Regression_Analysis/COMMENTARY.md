@@ -4,7 +4,7 @@
 # ソースコードの詳細解説
 #### 25~55行目
 ```py
-#トレーニングデータセットの説明変数と目的変数の定義
+#トレーニングデータセットの説明変数と目的変数の定義いいいいい
 def Set_IndV_and_DepV(training_data_set):
     X_train_age = training_data_set[:, 0].reshape(-1, 1)
     X_train_sex = training_data_set[:, 1].reshape(-1, 1)
