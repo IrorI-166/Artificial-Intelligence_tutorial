@@ -162,4 +162,4 @@ cython_debug/
 Scripts
 *.cfg
 share/
-Multiple_Regression_Analysis/sub.py
+.vscode/
