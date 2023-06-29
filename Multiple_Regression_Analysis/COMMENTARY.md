@@ -2,38 +2,20 @@
 単回帰では1つであった説明変数が二個以上になった回帰分析のこと
 
 # ソースコードの詳細解説
-#### 25~55行目
+概ね単回帰分析と変わらないのでほぼ省略。
+変わった部分は説明変数が1個から10個になった点のみ。
+### 58~61行目
 ```py
-#トレーニングデータセットの説明変数と目的変数の定義
-def Set_IndV_and_DepV(training_data_set):
-    X_train_age = training_data_set[:, 0].reshape(-1, 1)
-    X_train_sex = training_data_set[:, 1].reshape(-1, 1)
-    X_train_bmi = training_data_set[:, 2].reshape(-1, 1)
-    X_train_bp = training_data_set[:, 3].reshape(-1, 1)
-    X_train_tc = training_data_set[:, 4].reshape(-1, 1)
-    X_train_ldl = training_data_set[:, 5].reshape(-1, 1)
-    X_train_hdl = training_data_set[:, 6].reshape(-1, 1)
-    X_train_tch = training_data_set[:, 7].reshape(-1, 1)
-    X_train_ltg = training_data_set[:, 8].reshape(-1, 1)
-    X_train_glu = training_data_set[:, 9].reshape(-1, 1)
-    X_train = np.column_stack((X_train_age, X_train_sex, X_train_bmi, X_train_bp, X_train_tc, X_train_ldl, X_train_hdl, X_train_tch, X_train_ltg, X_train_glu))
-
-    Y_train_disease_progression = training_data_set[:, 10].reshape(-1, 1)
-
-
-    X_test_age = test_data_set[:, 0]
-    X_test_sex = test_data_set[:, 1]
-    X_test_bmi = test_data_set[:, 2]
-    X_test_bp = test_data_set[:, 3]
-    X_test_tc = test_data_set[:, 4]
-    X_test_ldl = test_data_set[:, 5]
-    X_test_hdl = test_data_set[:, 6]
-    X_test_tch = test_data_set[:, 7]
-    X_test_ltg = test_data_set[:, 8]
-    X_test_glu = test_data_set[:, 9]
-    X_test = np.column_stack((X_test_age, X_test_sex, X_test_bmi, X_test_bp, X_test_tc, X_test_ldl, X_test_hdl, X_test_tch, X_test_ltg, X_test_glu))
-
-    Y_test_disease_progression = test_data_set[:, 10].reshape(-1, 1)
-
-    return X_train, Y_train_disease_progression, X_test, Y_test_disease_progression
+#モデルの学習(scikit-learn)
+def model_fit(X_train, Y_train_disease_progression):
+    model = LinearRegression()
+    model.fit(X_train, Y_train_disease_progression)
+    return model
+```
+scikit-learnを用いた重回帰分析モデルの学習では、X_trainにn行10列の行列として説明変数のトレーニングデータを格納し、それによって導出される目的変数1つをn行1列の行列としてY_trainに格納、`fit`メソッドに渡すことで、以下のプロセスを経て学習が行われる。
+```
+1. (m, n)行列のX_trainと長さmのベクトルY_trainを用意し、説明変数Xと目的変数Yのデータを代入する。
+2. 行列X_trainとベクトルY_trainの内積を計算し、パラメータ（回帰係数）を仮決定する。
+3. 最小二乗法を使用して、仮決定したパラメータを用いて損失関数を最小化する。
+4. 損失関数が最小であればパラメーターを決定、そうでなければ2から再実行。
 ```
