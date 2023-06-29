@@ -87,7 +87,6 @@ def plot_graph(X_test, model):
     plt.ylabel('Y')  # Y軸のラベル
     plt.grid(True)  # グリッド線を表示
     plt.show()  # グラフを表示
-
 """
     plt.scatter(Y_test_disease_progression, predicted.flatten(), color="yellow", label="Multiple Linear Regression")
     plt.xlabel("Actual Test Data")
@@ -108,7 +107,7 @@ if __name__ == "__main__":
     print(test_data_set)
 
     X_train, Y_train_disease_progression, X_test, Y_test_disease_progression = Set_IndV_and_DepV(training_data_set)
-    print(f"X_test\t:\n{X_test}\nY_train_disease_progression\t:\n{Y_train_disease_progression}")
+    print(f"X_train\t:\n{X_train}\nY_train_disease_progression\t:\n{Y_train_disease_progression}")
 
     model = model_fit(X_train, Y_train_disease_progression)
     print(f"model\t:\t{model}")
