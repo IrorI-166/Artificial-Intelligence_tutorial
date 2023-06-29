@@ -95,6 +95,7 @@ def plot_graph(X_test, model):
     plt.legend()
     plt.show()
 """
+
 if __name__ == "__main__":
     training_data = create_dataset()
     print("training_data :")
