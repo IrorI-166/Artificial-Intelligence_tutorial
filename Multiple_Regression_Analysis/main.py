@@ -76,22 +76,17 @@ def get_result(model, X_test):
     return predicted
 
 #グラフの描画
-def plot_graph(X_test, Y_test_disease_progression, predicted):
-    # グラフの範囲を設定
-    x_min = min(X_test.flatten())
-    x_max = max(X_test.flatten())
+def plot_graph(X_test, model):
+    data = np.array(X_test)
+    #計算式定義
+    Y = (model.coef_[:, 0] * data[:, 0]) - (model.coef_[:, 1] * data[:, 1]) + (model.coef_[:, 2] * data[:, 2]) + (model.coef_[:, 3] * data[:, 3]) - (model.coef_[:, 4] * data[:, 4]) + (model.coef_[:, 5] * data[:, 5]) + (model.coef_[:, 6] * data[:, 6]) + (model.coef_[:, 7] * data[:, 7]) + (model.coef_[:, 8] * data[:, 8]) + (model.coef_[:, 9] * data[:, 9]) + model.intercept_
 
-    # 直線の式を作成
-    coefficients =model.coef_
-    intercept = model.intercept_
-    x = np.linspace(x_min, x_max, 10).reshape(-1, 1)
-    y = intercept + np.dot(x, coefficients)
-    # グラフを描画
-    plt.plot(x, y, color='red', label='Linear Regression')
-    plt.xlabel('X')
-    plt.ylabel('Y')
-    plt.legend()
-    plt.show()
+    X = np.arange(1, len(data) + 1)   # X軸の値 (1から10までの連番)
+    plt.plot(X, Y)  # プロット
+    plt.xlabel('Variables (A to I)')  # X軸のラベル
+    plt.ylabel('Y')  # Y軸のラベル
+    plt.grid(True)  # グリッド線を表示
+    plt.show()  # グラフを表示
 """
     plt.scatter(Y_test_disease_progression, predicted.flatten(), color="yellow", label="Multiple Linear Regression")
     plt.xlabel("Actual Test Data")
@@ -128,4 +123,4 @@ if __name__ == "__main__":
     print("切片:")
     print(model.intercept_)
 
-    plot_graph(X_test, Y_test_disease_progression, predicted)
+    plot_graph(X_test, model)
