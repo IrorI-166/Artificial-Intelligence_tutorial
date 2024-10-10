@@ -1,5 +1,5 @@
 #このへんはPyTorchドキュメントのNNチュートリアルを参考にします
-import torch as tch
+import torch
 from torch import nn
 from torch.utils.data import DataLoader
 from torchvision import datasets
@@ -36,9 +36,9 @@ for X, y in test_dataloader:
 device = (
     #この構文少し分からない
     "cuda"
-    if tch.cuda.is_available()
+    if torch.cuda.is_available()
     else "mps"
-    if tch.backends.mps.is_available()
+    if torch.backends.mps.is_available()
     else "cpu"
 )
 print(f"Using {device} device")
