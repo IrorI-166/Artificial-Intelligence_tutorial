@@ -28,17 +28,25 @@ def tokenizer():
     # トークナイザーをトレーニング (テキストのリストを使用)
     tokenizer.train_from_iterator(all_texts, trainer)
     #tokenizerをセーブ
-    tokenizer.save("./tokenizer-wiki.json")
+    tokenizer.save("Neural Network/LLM/Transformer/tokenizer-wiki.json")
+
+def loadTokenizer():
     #tokenizerをリロード
-    tokenizer = tokenizers.Tokenizer.from_file("./tokenizer-wiki.json")
+    tokenizer = tokenizers.Tokenizer.from_file("Neural Network/LLM/Transformer/tokenizer-wiki.json")
+    return tokenizer
+
+def useTokenizer(tokenizer):
     #tokenizerを使う
     output = tokenizer.encode("Hello, y'all! How are you 😁 ?")
     print(output.tokens)
+    print(output.ids)
 
 if __name__ == "__main__":
-    tokenizer()
+    #tokenizer()
+    tokenizer = loadTokenizer()
+    useTokenizer(tokenizer)
     # データの例を表示
-    for i in range(10):
-        print(train_dataset[i])
-        print(valid_dataset[i])
-        print(test_dataset[i])
+    #for i in range(10):
+        #print(train_dataset[i])
+        #print(valid_dataset[i])
+        #print(test_dataset[i])
