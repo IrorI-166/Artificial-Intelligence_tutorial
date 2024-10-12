@@ -1,6 +1,5 @@
 from datasets import load_dataset
 import tokenizers
-import os
 #from tokenizers import Tokenizer
 #from tokenizers.trainers import BpeTrainer
 #from tokenizers.pre_tokenizers import Whitespace
