@@ -1,9 +1,11 @@
 from datasets import load_dataset
 import tokenizers
+import numpy as np
 #from tokenizers import Tokenizer
 #from tokenizers.trainers import BpeTrainer
 #from tokenizers.pre_tokenizers import Whitespace
 #from tokenizers.models import BPE
+#from tokenizers.processors import TemplateProcessing
 
 # データセットをロード
 ds = load_dataset("Salesforce/wikitext", "wikitext-103-v1")
@@ -27,6 +29,20 @@ def tokenizer():
         all_texts.extend(dataset['text'])
     # トークナイザーをトレーニング (テキストのリストを使用)
     tokenizer.train_from_iterator(all_texts, trainer)
+    # 特殊トークンのIDを明示的に取得
+    cls_token_id = tokenizer.token_to_id("[CLS]")
+    sep_token_id = tokenizer.token_to_id("[SEP]")
+    #torkenizerにpost_process属性を追加
+    tokenizer.post_processor = tokenizers.processors.TemplateProcessing(
+        single="[CLS] $A [SEP]",
+        pair="[CLS] $A [SEP] $B:1 [SEP]:1",
+        special_tokens=[
+            ("[CLS]", cls_token_id),
+            ("[SEP]", sep_token_id),
+        ],
+    )
+    #tokenizerにenable_padding属性を追加
+    tokenizer.enable_padding(pad_id=3, pad_token="[PAD]")
     #tokenizerをセーブ
     tokenizer.save("Neural Network/LLM/Transformer/tokenizer-wiki.json")
 
@@ -37,16 +53,181 @@ def loadTokenizer():
 
 def useTokenizer(tokenizer):
     #tokenizerを使う
-    output = tokenizer.encode("Hello, y'all! How are you 😁 ?")
-    print(output.tokens)
-    print(output.ids)
+    batch_sentences = [
+    "But what about second breakfast?",
+    "Don't think he knows about second breakfast, Pip.",
+    "What about elevensies?",
+    ]
+    output1 = tokenizer.encode("Hello, y'all! How are you 😁 ?")
+    output2 = tokenizer.encode("Hello, y'all!", "How are you 😁 ?")
+    print(output1.tokens)
+    print(output2.tokens)
+    print(output2.attention_mask)
+    print(output2.type_ids)
+    #output2をnumpy配列に変換して結合する
+    # tokensをNumPy配列に変換（文字列をそのまま使用）
+    tokens_np = np.array(output2.tokens)
+    # attention_maskをNumPy配列に変換
+    attention_mask_np = np.array(output2.attention_mask)
+    # type_idsをNumPy配列に変換
+    type_ids_np = np.array(output2.type_ids)
+
+    # 2次元配列に結合（vstackで縦方向に結合）
+    combined_np_array = np.vstack([tokens_np, attention_mask_np, type_ids_np])
+
+    # 結果を表示
+    print("Combined 2D NumPy Array:")
+    print(combined_np_array)
+
+    batch_output = tokenizer.encode_batch(
+        [["Hello, y'all!", "How are you 😁 ?"],
+        ["Hello to you too!", "I'm fine, thank you!"]]
+        )
+    print("------batch_out------")
+    for i in range(2):
+        print(batch_output[i].tokens)
+        print(batch_output[i].ids)
+        print(batch_output[i].type_ids)
+        print(batch_output[i].attention_mask)
+
+def createTokenEmbeddingMatrix(tokenizer):
+    #トークンIDの総数
+    vocab_size = tokenizer.get_vocab_size()
+    #埋め込みベクトルの次元(ハイパーパラメーター)
+    embedding_dim = 768
+    # 埋め込み行列をランダムに初期化 ({トークンIDの数}行{埋め込みベクトルの次元数}列の行列)
+    embedding_matrix = np.random.randn(vocab_size, embedding_dim)
+
+    return embedding_matrix
+
+def useTokenEmbeddingMatrix(embedding_matrix):
+    # トークンIDリスト（例: [101, 7592, 2026]）
+    input_tokens = [101, 7592, 2026]
+
+    # トークンIDに対応するベクトルを取得
+    embedded_tokens = [embedding_matrix[token_id] for token_id in input_tokens]
+
+    # 結果の表示
+    for i, token_id in enumerate(input_tokens):
+        print(f"Token ID: {token_id}, Embedding Vector: {embedded_tokens[i][:5]}...")  # ベクトルの最初の5つの要素を表示
+
+def createPositionalEmbeddingMatrix(tokenizer):
+    #トークンIDの総数
+    vocab_size = tokenizer.get_vocab_size()
+    #埋め込みベクトルの次元(ハイパーパラメーター)
+    embedding_dim = 768
+    #位置符号行列を初期化
+    positional_matrix = np.empty((vocab_size, embedding_dim))
+
+    #位置符号行列をループして符号を追加
+    #単語位置でループ(列の決定)
+    for i in range(vocab_size):
+        #埋め込み次元数でループ(行の決定)
+        for k in range(embedding_dim//2): #切り捨て除算で位置を決定
+            t = i / (10000 ** (2 * k / embedding_dim))
+            positional_matrix[i, 2 * k] = np.sin(t)
+            positional_matrix[i, 2 * k + 1] = np.cos(t)
+
+    return positional_matrix
+
+def combineTokenAndPositional(embedding_matrix, positional_matrix):
+    embedding_matrix += positional_matrix
+    return embedding_matrix
+
+def softmax(x):
+    ex = np.exp(x - np.max(x))  # オーバーフローを防ぐために最大値を引く
+    return ex / (np.sum(ex, axis=-1, keepdims=True) + 1e-10)  #0除算防止に小さな値を加える
+
+# 既存の埋め込み行列と重み行列を元にQ, K, Vを計算する関数を定義
+def calculate_QKV(embedding_matrix, W_Q, W_K, W_V):
+    """
+    埋め込み行列に基づいてQuery, Key, Valueを計算する関数
+    :param embedding_matrix: 埋め込み行列 (トークン数 × 埋め込み次元)
+    :param W_Q: Queryの重み行列
+    :param W_K: Keyの重み行列
+    :param W_V: Valueの重み行列
+    :return: Q, K, V行列
+    """
+    # Query行列を計算
+    Q = np.dot(embedding_matrix, W_Q)  # トークン数 × 埋め込み次元
+    # Key行列を計算
+    K = np.dot(embedding_matrix, W_K)  # トークン数 × 埋め込み次元
+    # Value行列を計算
+    V = np.dot(embedding_matrix, W_V)  # トークン数 × 埋め込み次元
+    return Q, K, V
+
+def Single_Head_Attention(Q, K, V):
+    """
+    Scaled Dot-Product Attentionの計算
+    :param Q: Query行列(入力シーケンスのトークン数 × 埋め込みベクトルの次元数の形状を持つ行列)
+    :param K: Key行列
+    :param V: Value行列
+    :return: Attentionによる出力
+    """
+    #埋め込みベクトルの次元(ハイパーパラメーター)
+    embedding_dim = 768
+
+    """
+    ドット積 QKt: QueryとKeyの類似性を計算し、各トークン間の関連度を得る。
+    QueryとKeyの転置行列のドット積を計算し、スケーリング
+    Qのi行目は入力のi番目のトークン(1行768列の行列)⇒Kとのドット積で一つの値が出る
+    scoresが持つのは入力長×入力長サイズを持つ行列となる
+    """
+    scores = np.dot(Q, K.T) / np.sqrt(embedding_dim)
+    #scores = np.clip(scores, -500, 500)  # スコアを適度にクリッピング
+
+    """
+    ソフトマックスを適用してAttentionの重みを計算
+    入力長×入力長サイズの確率値行列が得られる
+    この確率値行列においてi行j列の値は、
+    入力上のj番目のトークンが入力上のi番目のトークンに対してどれだけ注意を向けるかを示す
+    """
+    attention_weights = softmax(scores)
+    #attention_weights = np.clip(attention_weights, 1e-5, 1) # 極端な小さな値を防ぐ
+    """
+    Attention重みとValue行列のドット積を計算して最終的な出力を得る
+    Vは入力長×埋め込み次元数サイズの行列で各トークンの「意味」を持ち、
+    Attention重みは入力長×入力長サイズの行列でそれぞれのトークンに対する注意量を持つ
+    ドット積でVの1行とAttention重みの1列の重み付き和が得られる
+    したがって、ドット積の結果1行×埋め込み次元数サイズの行列が各トークンについて得られる(入力トークン数×埋め込み次元数行列)
+    """
+    output = np.dot(attention_weights, V)
+
+    return output, attention_weights
+
+def Multi_Head_Attention():
+    
+    pass
 
 if __name__ == "__main__":
-    #tokenizer()
-    tokenizer = loadTokenizer()
-    useTokenizer(tokenizer)
+    # トークン数と埋め込み次元数の例
+    E_len = 100  # 入力シーケンス長
+    embedding_dim = 768  # 埋め込みベクトルの次元
+
     # データの例を表示
     #for i in range(10):
         #print(train_dataset[i])
         #print(valid_dataset[i])
         #print(test_dataset[i])
+
+    #tokenizerインスタンスを作成&トレーニング
+    #tokenizer()
+    tokenizer = loadTokenizer()
+    #useTokenizer(tokenizer)
+    embedding_matrix = createTokenEmbeddingMatrix(tokenizer)
+    #print(embedding_matrix)
+    positional_matrix = createPositionalEmbeddingMatrix(tokenizer)
+    #print(positional_matrix)
+    embedding_matrix = combineTokenAndPositional(embedding_matrix, positional_matrix)
+    #print(embedding_matrix)
+    #useTokenEmbeddingMatrix(embedding_matrix)
+
+    # Query, Key, Valueの重み行列（ランダムに初期化）
+    W_Q = np.random.randn(embedding_dim, embedding_dim) * np.sqrt(2 / embedding_dim)
+    W_K = np.random.randn(embedding_dim, embedding_dim) * np.sqrt(2 / embedding_dim)
+    W_V = np.random.randn(embedding_dim, embedding_dim) * np.sqrt(2 / embedding_dim)
+    # Q, K, Vの計算
+    Q, K, V = calculate_QKV(embedding_matrix, W_Q, W_K, W_V)
+    output, attention_weights = Single_Head_Attention(Q, K, V)
+    print(output)
+    print(attention_weights)
