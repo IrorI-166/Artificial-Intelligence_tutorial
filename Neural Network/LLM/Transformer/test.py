@@ -195,9 +195,54 @@ def Single_Head_Attention(Q, K, V):
 
     return output, attention_weights
 
-def Multi_Head_Attention():
+def Multi_Head_Attention(Q, K, V, embedding_dim, num_heads):
+    """
+    MHAとは埋め込み次元÷ヘッド数の次元をもって入力を多角的に解釈し、
+    それを最後に結合することで元の入力と同じサイズの行列を出力することで、
+    ヘッド数が8であれば8個分の解釈を持った埋め込み次元が作成できる
+    """
+    #埋め込みベクトルの次元(ハイパーパラメーター)
+    embedding_dim = 768
+    #MHAのヘッド数
+    num_heads = num_heads
+    """
+    ヘッド数で埋め込み次元を割る理由：
+    1．計算の効率化：各ヘッドごとの計算量を減らすことが可能
+    2．分散した並列処理の実現：各ヘッドごとに異なる視点から入力を解釈することで、より精度の高い推論を実現
+    """
+    #各ヘッドの埋め込み次元
+    d_k = embedding_dim // num_heads
+
+    #各ヘッドで得られた重み行列と注意行列を保存するリスト
+    heads_output = []
+    heads_weights = []
+
+    for i in range(num_heads):
+        # Query, Key, Valueの重み行列（ランダムに初期化）
+        W_Q = np.random.randn(embedding_dim, d_k) * np.sqrt(2 / embedding_dim)
+        W_K = np.random.randn(embedding_dim, d_k) * np.sqrt(2 / embedding_dim)
+        W_V = np.random.randn(embedding_dim, d_k) * np.sqrt(2 / embedding_dim)
+
+        Q_head = np.dot(Q, W_Q)
+        K_head = np.dot(K, W_K)
+        V_head = np.dot(V, W_V)
+
+        # 3. Single-Head Attentionを実行
+        head_output, head_weights = Single_Head_Attention(Q_head, K_head, V_head, d_k)
+        
+        heads_output.append(head_output)
+        heads_weights.append(head_weights)
+
+    # 4. Concatenate heads
+    concatenated_heads = np.concatenate(heads_output, axis=-1)
     
-    pass
+    # 5. 最終的な線形変換を実行（ヘッドの出力を統合）
+    W_O = np.random.randn(concatenated_heads.shape[-1], embedding_dim)
+    final_output = np.dot(concatenated_heads, W_O)
+    
+    return final_output, heads_weights
+
+
 
 if __name__ == "__main__":
     # トークン数と埋め込み次元数の例
@@ -228,6 +273,6 @@ if __name__ == "__main__":
     W_V = np.random.randn(embedding_dim, embedding_dim) * np.sqrt(2 / embedding_dim)
     # Q, K, Vの計算
     Q, K, V = calculate_QKV(embedding_matrix, W_Q, W_K, W_V)
-    output, attention_weights = Single_Head_Attention(Q, K, V)
+    output, attention_weights = Multi_Head_Attention(Q, K, V, embedding_dim, 8)
     print(output)
     print(attention_weights)
