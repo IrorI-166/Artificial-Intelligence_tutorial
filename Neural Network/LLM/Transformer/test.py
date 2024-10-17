@@ -275,7 +275,6 @@ def feedforward(embedding_dim, x):
 
     return output
 
-
 if __name__ == "__main__":
     # トークン数と埋め込み次元数の例
     E_len = 100  # 入力シーケンス長
