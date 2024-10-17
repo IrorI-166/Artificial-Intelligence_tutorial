@@ -156,7 +156,7 @@ def calculate_QKV(embedding_matrix, W_Q, W_K, W_V):
     V = np.dot(embedding_matrix, W_V)  # トークン数 × 埋め込み次元
     return Q, K, V
 
-def Single_Head_Attention(Q, K, V):
+def Single_Head_Attention(Q, K, V, embedding_dim):
     """
     Scaled Dot-Product Attentionの計算
     :param Q: Query行列(入力シーケンスのトークン数 × 埋め込みベクトルの次元数の形状を持つ行列)
@@ -165,7 +165,7 @@ def Single_Head_Attention(Q, K, V):
     :return: Attentionによる出力
     """
     #埋め込みベクトルの次元(ハイパーパラメーター)
-    embedding_dim = 768
+    embedding_dim = embedding_dim
 
     """
     ドット積 QKt: QueryとKeyの類似性を計算し、各トークン間の関連度を得る。
@@ -242,12 +242,44 @@ def Multi_Head_Attention(Q, K, V, embedding_dim, num_heads):
     
     return final_output, heads_weights
 
+def relu(x):
+    return np.maximum(0, x)
+
+def forward(W1, W2, x, b1, b2):
+    """
+    一度ぶわっと広げた行列に入力の値をバラまいて計算して、
+    ReLUで0以下を消し、得た結果の行列をもとの次元と同じ行列に再度バラまいて計算する
+    結果一度解釈範囲を広げた後に元のサイズに圧縮された行列が得られる
+    """
+    # 第1の全結合層とReLU活性化関数
+    x = np.dot(x, W1) + b1
+    x = relu(x)
+    
+    # 第2の全結合層
+    x = np.dot(x, W2) + b2
+    return x
+
+def feedforward(embedding_dim, x):
+    """
+    ここでは2層の順伝播NNとして定義する
+    """
+    #隠れ次元層(ハイパーパラメータ)
+    hidden_dim = 2048    # 隠れ層の次元数
+
+    W1 = np.random.randn(embedding_dim, hidden_dim) * np.sqrt(2 / embedding_dim)
+    W2 = np.random.randn(hidden_dim, embedding_dim) * np.sqrt(2 / hidden_dim)
+    b1 = np.zeros((1, hidden_dim))
+    b2 = np.zeros((1, hidden_dim))
+
+    output = forward(W1, W2, x, b1, b2)
+
+    return output
 
 
 if __name__ == "__main__":
     # トークン数と埋め込み次元数の例
     E_len = 100  # 入力シーケンス長
-    embedding_dim = 768  # 埋め込みベクトルの次元
+    embedding_dim = 384  # 埋め込みベクトルの次元
 
     # データの例を表示
     #for i in range(10):
@@ -268,11 +300,15 @@ if __name__ == "__main__":
     #useTokenEmbeddingMatrix(embedding_matrix)
 
     # Query, Key, Valueの重み行列（ランダムに初期化）
-    W_Q = np.random.randn(embedding_dim, embedding_dim) * np.sqrt(2 / embedding_dim)
-    W_K = np.random.randn(embedding_dim, embedding_dim) * np.sqrt(2 / embedding_dim)
-    W_V = np.random.randn(embedding_dim, embedding_dim) * np.sqrt(2 / embedding_dim)
+    #W_Q = np.random.randn(embedding_dim, embedding_dim) * np.sqrt(2 / embedding_dim)
+    #W_K = np.random.randn(embedding_dim, embedding_dim) * np.sqrt(2 / embedding_dim)
+    #W_V = np.random.randn(embedding_dim, embedding_dim) * np.sqrt(2 / embedding_dim)
     # Q, K, Vの計算
-    Q, K, V = calculate_QKV(embedding_matrix, W_Q, W_K, W_V)
-    output, attention_weights = Multi_Head_Attention(Q, K, V, embedding_dim, 8)
-    print(output)
-    print(attention_weights)
+    #Q, K, V = calculate_QKV(embedding_matrix, W_Q, W_K, W_V)
+    #output, attention_weights = Multi_Head_Attention(Q, K, V, embedding_dim, 8)
+    #print(output)
+    #print(attention_weights)
+
+    # ダミー入力データ (1つのシーケンスのトークンに対する埋め込みベクトル)
+    x = np.random.randn(1, embedding_dim)  # 1つのトークンの埋め込みベクトル
+    output = feedforward(embedding_dim, x) #本来はMHAのoutputをxに渡す
