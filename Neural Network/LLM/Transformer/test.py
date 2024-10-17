@@ -156,7 +156,7 @@ def calculate_QKV(embedding_matrix, W_Q, W_K, W_V):
     V = np.dot(embedding_matrix, W_V)  # トークン数 × 埋め込み次元
     return Q, K, V
 
-def Single_Head_Attention(Q, K, V):
+def Single_Head_Attention(Q, K, V, embedding_dim):
     """
     Scaled Dot-Product Attentionの計算
     :param Q: Query行列(入力シーケンスのトークン数 × 埋め込みベクトルの次元数の形状を持つ行列)
@@ -165,7 +165,7 @@ def Single_Head_Attention(Q, K, V):
     :return: Attentionによる出力
     """
     #埋め込みベクトルの次元(ハイパーパラメーター)
-    embedding_dim = 768
+    embedding_dim = embedding_dim
 
     """
     ドット積 QKt: QueryとKeyの類似性を計算し、各トークン間の関連度を得る。
@@ -229,17 +229,17 @@ def Multi_Head_Attention(Q, K, V, embedding_dim, num_heads):
 
         # 3. Single-Head Attentionを実行
         head_output, head_weights = Single_Head_Attention(Q_head, K_head, V_head, d_k)
-        
+
         heads_output.append(head_output)
         heads_weights.append(head_weights)
 
     # 4. Concatenate heads
     concatenated_heads = np.concatenate(heads_output, axis=-1)
-    
+
     # 5. 最終的な線形変換を実行（ヘッドの出力を統合）
     W_O = np.random.randn(concatenated_heads.shape[-1], embedding_dim)
     final_output = np.dot(concatenated_heads, W_O)
-    
+
     return final_output, heads_weights
 
 
