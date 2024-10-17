@@ -229,17 +229,17 @@ def Multi_Head_Attention(Q, K, V, embedding_dim, num_heads):
 
         # 3. Single-Head Attentionを実行
         head_output, head_weights = Single_Head_Attention(Q_head, K_head, V_head, d_k)
-        
+
         heads_output.append(head_output)
         heads_weights.append(head_weights)
 
     # 4. Concatenate heads
     concatenated_heads = np.concatenate(heads_output, axis=-1)
-    
+
     # 5. 最終的な線形変換を実行（ヘッドの出力を統合）
     W_O = np.random.randn(concatenated_heads.shape[-1], embedding_dim)
     final_output = np.dot(concatenated_heads, W_O)
-    
+
     return final_output, heads_weights
 
 def relu(x):
