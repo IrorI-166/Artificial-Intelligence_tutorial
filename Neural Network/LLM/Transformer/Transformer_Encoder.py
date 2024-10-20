@@ -1,90 +1,114 @@
-from datasets import load_dataset
+import torch
+import torch.nn as nn
 import tokenizers
-import numpy as np
-#from tokenizers import Tokenizer
-#from tokenizers.trainers import BpeTrainer
-#from tokenizers.pre_tokenizers import Whitespace
-#from tokenizers.models import BPE
-
-#EntryToken
-E = []
-
-#データセットの用意
-def createDatasets():
-    # データセットをロード
-    ds = load_dataset("Salesforce/wikitext", "wikitext-103-v1")
-    # トレーニング/検証/テストデータセットを取得
-    train_dataset = ds['train']
-    valid_dataset = ds['validation']
-    test_dataset = ds['test']
-
-    return train_dataset, valid_dataset, test_dataset
 
 #tokenizerインスタンスを作成&トレーニング
-def tokenizer(train_dataset, valid_dataset, test_dataset):
+def tokenizer():
     #tokenizerのインスタンスを作成
     tokenizer = tokenizers.Tokenizer(tokenizers.models.BPE(unk_token="[UNK]"))
     #trainerのインスタンスを初期化
     trainer = tokenizers.trainers.BpeTrainer(special_tokens=["[UNK]", "[CLS]", "[SEP]", "[PAD]", "[MASK]"])
     #tokenizerにpre_trainer属性を追加
     tokenizer.pre_tokenizer = tokenizers.pre_tokenizers.Whitespace()
-    # データセットからテキストを抽出 (train, valid, test からトレーニング)
-    all_texts = []
-    for dataset in [train_dataset, valid_dataset, test_dataset]:
-        all_texts.extend(dataset['text'])
-    # トークナイザーをトレーニング (テキストのリストを使用)
-    tokenizer.train_from_iterator(all_texts, trainer)
-    # 特殊トークンのIDを明示的に取得
-    cls_token_id = tokenizer.token_to_id("[CLS]")
-    sep_token_id = tokenizer.token_to_id("[SEP]")
-    #torkenizerにpost_process属性を追加
-    tokenizer.post_processor = tokenizers.processors.TemplateProcessing(
-        single="[CLS] $A [SEP]",
-        pair="[CLS] $A [SEP] $B:1 [SEP]:1",
-        special_tokens=[
-            ("[CLS]", cls_token_id),
-            ("[SEP]", sep_token_id),
-        ],
-    )
-    #tokenizerにenable_padding属性を追加
-    tokenizer.enable_padding(pad_id=3, pad_token="[PAD]")
-    #tokenizerをセーブ
-    tokenizer.save("Neural Network/LLM/Transformer/tokenizer-wiki.json")
 
-#tokenizerをリロード
-def loadTokenizer():
-    tokenizer = tokenizers.Tokenizer.from_file("Neural Network/LLM/Transformer/tokenizer-wiki.json")
-    return tokenizer
+import torch
+import torch.nn as nn
+import torch.nn.functional as F
 
-def createEmbeddingMatrix(tokenizer):
-    #トークンIDの総数
-    vocab_size = tokenizer.get_vocab_size()
-    #埋め込みベクトルの次元(ハイパーパラメーター)
-    embedding_dim = 768
-    # 埋め込み行列をランダムに初期化 (トークンIDの数 × 埋め込みベクトルの次元数)
-    embedding_matrix = np.random.randn(vocab_size, embedding_dim)
+class MultiHeadAttention(nn.Module):
+    def __init__(self, embed_size, num_heads):
+        super(MultiHeadAttention, self).__init__()
+        assert embed_size % num_heads == 0, "Embedding size must be divisible by number of heads"
+        
+        self.embed_size = embed_size
+        self.num_heads = num_heads
+        self.head_dim = embed_size // num_heads
+        
+        self.values = nn.Linear(self.head_dim, self.head_dim, bias=False)
+        self.keys = nn.Linear(self.head_dim, self.head_dim, bias=False)
+        self.queries = nn.Linear(self.head_dim, self.head_dim, bias=False)
+        self.fc_out = nn.Linear(num_heads * self.head_dim, embed_size)
+    
+    def forward(self, query, key, value):
+        N = query.shape[0]  # batch size
+        value_len, key_len, query_len = value.shape[1], key.shape[1], query.shape[1]
+        
+        # Query, Key, Valueの線形変換と分割 (num_heads個に)
+        queries = self.queries(query).view(N, query_len, self.num_heads, self.head_dim)
+        keys = self.keys(key).view(N, key_len, self.num_heads, self.head_dim)
+        values = self.values(value).view(N, value_len, self.num_heads, self.head_dim)
+        
+        # アテンションスコアの計算
+        energy = torch.einsum("nqhd,nkhd->nhqk", queries, keys)  # ドット積
+        attention = torch.softmax(energy / (self.embed_size ** (1/2)), dim=3)  # スケーリング&ソフトマックス
+        
+        # Valueに対するアテンション
+        out = torch.einsum("nhql,nlhd->nqhd", attention, values).reshape(N, query_len, self.num_heads * self.head_dim)
+        
+        # 最後に全体を線形変換して出力
+        out = self.fc_out(out)
+        return out
 
-    return embedding_matrix
 
-def createPositionalEmbeddingMatrix(tokenizer):
-    #トークンIDの総数
-    vocab_size = tokenizer.get_vocab_size()
-    #埋め込みベクトルの次元(ハイパーパラメーター)
-    embedding_dim = 768
-    #位置符号行列を初期化
-    positional_matrix = np.empty((vocab_size, embedding_dim))
+class FeedForward(nn.Module):
+    def __init__(self, embed_size, hidden_dim):
+        super(FeedForward, self).__init__()
+        self.fc1 = nn.Linear(embed_size, hidden_dim)
+        self.fc2 = nn.Linear(hidden_dim, embed_size)
+        self.relu = nn.ReLU()
 
-    #位置符号行列をループして符号を追加
-    #単語位置でループ(列の決定)
-    for i in range(vocab_size):
-        #埋め込み次元数でループ(行の決定)
-        for k in range(embedding_dim//2): #切り捨て除算で位置を決定
-            t = i / (10000 ** (2 * k / embedding_dim))
-            positional_matrix[i, 2 * k] = np.sin(t)
-            positional_matrix[i, 2 * k + 1] = np.cos(t)
+    def forward(self, x):
+        return self.fc2(self.relu(self.fc1(x)))
 
-    return positional_matrix
+class EncoderLayer(nn.Module):
+    def __init__(self, embed_size, heads, hidden_dim, dropout):
+        super(EncoderLayer, self).__init__()
+        self.attention = MultiHeadAttention(embed_size, heads)
+        self.norm1 = nn.LayerNorm(embed_size)
+        self.ffn = FeedForward(embed_size, hidden_dim)
+        self.norm2 = nn.LayerNorm(embed_size)
+        self.dropout = nn.Dropout(dropout)
 
-def combineTokenAndPositional(embedding_matrix, positional_matrix):
-    embedding_matrix += positional_matrix
-    return embedding_matrix
+    def forward(self, x, mask):
+        # マルチヘッドアテンションの適用
+        attn_output = self.attention(x, x, x, mask)
+        x = self.norm1(x + self.dropout(attn_output))
+
+        # フィードフォワードネットワークの適用
+        ffn_output = self.ffn(x)
+        x = self.norm2(x + self.dropout(ffn_output))
+
+        return x
+
+class Encoder(nn.Module):
+    def __init__(self, num_layers, embed_size, heads, hidden_dim, dropout):
+        super(Encoder, self).__init__()
+        self.layers = nn.ModuleList(
+            [EncoderLayer(embed_size, heads, hidden_dim, dropout) for _ in range(num_layers)]
+        )
+        self.dropout = nn.Dropout(dropout)
+
+    def forward(self, x, mask):
+        for layer in self.layers:
+            x = layer(x, mask)
+        return x
+
+class TransformerEncoder(nn.Module):
+    def __init__(self, vocab_size, embed_size, num_layers, heads, hidden_dim, dropout, max_length):
+        super(TransformerEncoder, self).__init__()
+        self.embedding = nn.Embedding(vocab_size, embed_size)
+        self.pos_embedding = nn.Embedding(max_length, embed_size)
+        self.encoder = Encoder(num_layers, embed_size, heads, hidden_dim, dropout)
+        self.dropout = nn.Dropout(dropout)
+
+    def forward(self, x, mask):
+        # 入力の埋め込みと位置埋め込みを加算
+        seq_length = x.shape[1]
+        positions = torch.arange(0, seq_length).unsqueeze(0).expand(x.size(0), seq_length)
+        x = self.dropout(self.embedding(x) + self.pos_embedding(positions))
+
+        # エンコーダーを通して出力を得る
+        out = self.encoder(x, mask)
+        return out
+
+if __name__ == "__main__":

@@ -269,11 +269,61 @@ def feedforward(embedding_dim, x):
     W1 = np.random.randn(embedding_dim, hidden_dim) * np.sqrt(2 / embedding_dim)
     W2 = np.random.randn(hidden_dim, embedding_dim) * np.sqrt(2 / hidden_dim)
     b1 = np.zeros((1, hidden_dim))
-    b2 = np.zeros((1, hidden_dim))
+    b2 = np.zeros((1, embedding_dim))
 
     output = forward(W1, W2, x, b1, b2)
 
     return output
+
+def Layer_Normalization(x):
+    """
+    データの各行（トークン）の特徴量が、平均0、標準偏差1の正規化されたベクトルに変換されます.
+    これにより、異なる層での分布の変化に依存せず、安定した学習が可能になります.
+    """
+    epsilon=1e-6
+    """Layer Normalization"""
+    # 各行に対する平均を計算 (axis=-1は行方向で計算)
+    mean = np.mean(x, axis=-1, keepdims=True)
+    
+    # 各行に対する標準偏差を計算 (axis=-1は行方向で計算)
+    std = np.std(x, axis=-1, keepdims=True)
+    
+    # 入力xを正規化 (mean=0, std=1になるようにスケーリング)
+    return (x - mean) / (std + epsilon)
+
+def residual_connection(x, sublayer_output):
+    """
+    残差結合: sublayer_output (MHA またはフィードフォワード層の出力) に元の入力 x を足し合わせる。
+    さらに、足し合わせたものにLayer Normalizationを適用。
+    """
+    return Layer_Normalization(x + sublayer_output)
+
+def dropout(x):
+    """
+    X: 入力データ
+    drop_prob: ドロップアウト率（例: 0.5）
+    """
+    #ドロップアウト率(ハイパーパラメータ)
+    drop_prob = 0.5
+
+    """
+    入力データのサイズをPython：アンパック機能で渡して一様乱数分布を作成
+    drop_probの確率で値を0にする
+    """
+    dropout_mask = np.random.rand(*x.shape) > drop_prob
+
+    #入力データにマスクを適用して一部の値を無効化
+    x_dropped = x*dropout_mask
+
+    #ドロップアウト率に応じてスケーリング
+    #ドロップアウト率に応じてスケーリングすることで、全てのニューロンを使用する場合と期待値が一致するようにする
+    x_scaled = x_dropped / (1.0 - drop_prob)
+
+    return x_scaled
+
+#正規版関数定義
+def MHA(Q, K, V, embedding_dim, num_heads):
+    Multi_Head_Attention(Q, K, V, embedding_dim, num_heads)
 
 if __name__ == "__main__":
     # トークン数と埋め込み次元数の例
@@ -311,3 +361,25 @@ if __name__ == "__main__":
     # ダミー入力データ (1つのシーケンスのトークンに対する埋め込みベクトル)
     x = np.random.randn(1, embedding_dim)  # 1つのトークンの埋め込みベクトル
     output = feedforward(embedding_dim, x) #本来はMHAのoutputをxに渡す
+    print(output)
+
+    #残差結合と層正規化
+    output_from_mha = np.random.randn(1, embedding_dim)  # MHAやフィードフォワードからの出力
+    x_input = np.random.randn(1, embedding_dim)  # 元の入力
+
+    # 残差結合
+    output_with_residual = residual_connection(x_input, output_from_mha)
+
+    print(output_with_residual)
+
+    #Dropout
+    # テスト用のデータ
+    X = np.array([[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]])
+
+    # ドロップアウトを適用
+    X_after_dropout = dropout(X)
+
+    print("ドロップアウト後の入力データ:")
+    print(X_after_dropout)
+
+    #正規版
