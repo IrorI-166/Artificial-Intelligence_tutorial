@@ -100,6 +100,15 @@ def createTokenEmbeddingMatrix(tokenizer):
 
     return embedding_matrix
 
+def extract_embeddings(tokenizer, embedding_matrix, input_text):
+    # 1. トークナイズしてトークンIDを取得
+    tokens = tokenizer.encode(input_text).ids
+    
+    # 2. トークンIDに対応するベクトルを抽出
+    extracted_embeddings = embedding_matrix[tokens]
+    
+    return extracted_embeddings
+
 def useTokenEmbeddingMatrix(embedding_matrix):
     # トークンIDリスト（例: [101, 7592, 2026]）
     input_tokens = [101, 7592, 2026]
@@ -304,7 +313,7 @@ def dropout(x):
     drop_prob: ドロップアウト率（例: 0.5）
     """
     #ドロップアウト率(ハイパーパラメータ)
-    drop_prob = 0.5
+    drop_prob = 0.9
 
     """
     入力データのサイズをPython：アンパック機能で渡して一様乱数分布を作成
@@ -322,8 +331,54 @@ def dropout(x):
     return x_scaled
 
 #正規版関数定義
-def MHA(Q, K, V, embedding_dim, num_heads):
-    Multi_Head_Attention(Q, K, V, embedding_dim, num_heads)
+def Tokenize(input_text):
+    tokenizer = loadTokenizer()
+    #埋め込み行列作成
+    embed_matrix = createTokenEmbeddingMatrix(tokenizer)
+    
+    positional_matrix = createPositionalEmbeddingMatrix(tokenizer)
+    embed_matrix = combineTokenAndPositional(embed_matrix, positional_matrix)
+    extracted_embeddings = extract_embeddings(tokenizer, embed_matrix, input_text)
+    return extracted_embeddings #(input_vocab_size, embedding_dim)
+
+def MHA(extracted_embeddings, embedding_dim, num_heads):
+    """
+    1. トークン化済み入力行列からQ, V, Kを算出
+    2. MHAでいくつかに分割して計算、結合して出力と注意重み行列を獲得
+    3. MHA出力に対して残差結合
+    4. 残差結合出力に対してドロップアウト
+    """
+    # Query, Key, Valueの重み行列（ランダムに初期化）
+    W_Q = np.random.randn(embedding_dim, embedding_dim) * np.sqrt(2 / embedding_dim)
+    W_K = np.random.randn(embedding_dim, embedding_dim) * np.sqrt(2 / embedding_dim)
+    W_V = np.random.randn(embedding_dim, embedding_dim) * np.sqrt(2 / embedding_dim)
+    Q, K, V = calculate_QKV(extracted_embeddings, W_Q, W_K, W_V) #(input_vocab_size, embedding_dim)
+    final_output, heads_weights = Multi_Head_Attention(Q, K, V, embedding_dim, num_heads) #final_output:(input_vocab_size, embedding_dim)
+    output_with_dropout = dropout(final_output) #(input_vocab_size, embedding_dim)
+    residual_output = residual_connection(extracted_embeddings, output_with_dropout) #(input_vocab_size, embedding_dim)
+
+    return residual_output, heads_weights
+
+def FFL(ex_output):
+    output = feedforward(embedding_dim, ex_output)
+    output_with_dropout = dropout(output) #(input_vocab_size, embedding_dim)
+    residual_output = residual_connection(ex_output, output_with_dropout) #(input_vocab_size, embedding_dim)
+
+    return residual_output
+
+def Transformer_EncoderOnly(input_text):
+    embedding_dim = 768
+    num_heads = 8
+    
+    # トークナイズして埋め込みを取得
+    extracted_embeddings = Tokenize(input_text)
+    
+    # MHA と FFL を1度に処理
+    output, heads_weights = MHA(extracted_embeddings, embedding_dim, num_heads)
+    output = FFL(output)
+    
+    return output
+
 
 if __name__ == "__main__":
     # トークン数と埋め込み次元数の例

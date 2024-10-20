@@ -11,8 +11,19 @@ def tokenizer():
     #tokenizerにpre_trainer属性を追加
     tokenizer.pre_tokenizer = tokenizers.pre_tokenizers.Whitespace()
 
-import torch
-import torch.nn as nn
+class MHA(nn.Module):
+    def __init__(self, numHeads, ):
+        super(MultiHeadAttention).__init__()
+
+
+
+class Transformer_Encoder(nn.Module):
+    def __init__(self):
+        super(nn.TransformerEncoder).__init_()
+
+
+
+
 import torch.nn.functional as F
 
 class MultiHeadAttention(nn.Module):
@@ -48,7 +59,6 @@ class MultiHeadAttention(nn.Module):
         # 最後に全体を線形変換して出力
         out = self.fc_out(out)
         return out
-
 
 class FeedForward(nn.Module):
     def __init__(self, embed_size, hidden_dim):
