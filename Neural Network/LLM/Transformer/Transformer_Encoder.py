@@ -1,124 +1,206 @@
 import torch
 import torch.nn as nn
+import torch.optim as optim
+from torch.utils.data import DataLoader, Dataset, random_split
+from torch.amp import autocast, GradScaler
+from torch.nn.utils.rnn import pad_sequence
 import tokenizers
+from DatasetsAndTorkenizer import loadTexts
+import sys
 
 #tokenizerインスタンスを作成&トレーニング
-def tokenizer():
-    #tokenizerのインスタンスを作成
-    tokenizer = tokenizers.Tokenizer(tokenizers.models.BPE(unk_token="[UNK]"))
-    #trainerのインスタンスを初期化
-    trainer = tokenizers.trainers.BpeTrainer(special_tokens=["[UNK]", "[CLS]", "[SEP]", "[PAD]", "[MASK]"])
-    #tokenizerにpre_trainer属性を追加
-    tokenizer.pre_tokenizer = tokenizers.pre_tokenizers.Whitespace()
+def loadTokenizer():
+    #tokenizerをリロード
+    tokenizer = tokenizers.Tokenizer.from_file("Neural Network/LLM/Transformer/tokenizer-wiki.json")
+    return tokenizer
 
-class MHA(nn.Module):
-    def __init__(self, numHeads, ):
-        super(MultiHeadAttention).__init__()
-
-
-
-class Transformer_Encoder(nn.Module):
-    def __init__(self):
-        super(nn.TransformerEncoder).__init_()
-
-
-
-
-import torch.nn.functional as F
-
-class MultiHeadAttention(nn.Module):
-    def __init__(self, embed_size, num_heads):
-        super(MultiHeadAttention, self).__init__()
-        assert embed_size % num_heads == 0, "Embedding size must be divisible by number of heads"
+class TransformerEncoderModel(nn.Module):
+    def __init__(self, input_dim, embed_size, num_heads, hidden_dim, num_layers, dropout=0.1):
+        super(TransformerEncoderModel, self).__init__()
         
-        self.embed_size = embed_size
-        self.num_heads = num_heads
-        self.head_dim = embed_size // num_heads
+        # 埋め込み層: 入力のトークンIDを埋め込みベクトルに変換
+        self.embedding = nn.Embedding(input_dim, embed_size)
         
-        self.values = nn.Linear(self.head_dim, self.head_dim, bias=False)
-        self.keys = nn.Linear(self.head_dim, self.head_dim, bias=False)
-        self.queries = nn.Linear(self.head_dim, self.head_dim, bias=False)
-        self.fc_out = nn.Linear(num_heads * self.head_dim, embed_size)
-    
-    def forward(self, query, key, value):
-        N = query.shape[0]  # batch size
-        value_len, key_len, query_len = value.shape[1], key.shape[1], query.shape[1]
+        # Positional Encoding: シーケンスの位置情報を付与
+        self.pos_encoder = PositionalEncoding(embed_size, dropout)
         
-        # Query, Key, Valueの線形変換と分割 (num_heads個に)
-        queries = self.queries(query).view(N, query_len, self.num_heads, self.head_dim)
-        keys = self.keys(key).view(N, key_len, self.num_heads, self.head_dim)
-        values = self.values(value).view(N, value_len, self.num_heads, self.head_dim)
+        # Transformer Encoder層(MHA->FFLのフローが全部この中で内部定義される)
+        encoder_layers = nn.TransformerEncoderLayer(
+            d_model=embed_size, 
+            nhead=num_heads, 
+            dim_feedforward=hidden_dim, 
+            dropout=dropout
+        )
         
-        # アテンションスコアの計算
-        energy = torch.einsum("nqhd,nkhd->nhqk", queries, keys)  # ドット積
-        attention = torch.softmax(energy / (self.embed_size ** (1/2)), dim=3)  # スケーリング&ソフトマックス
+        # エンコーダー全体の構築（複数のエンコーダーレイヤーを積み重ねる）
+        self.transformer_encoder = nn.TransformerEncoder(encoder_layers, num_layers)
         
-        # Valueに対するアテンション
-        out = torch.einsum("nhql,nlhd->nqhd", attention, values).reshape(N, query_len, self.num_heads * self.head_dim)
-        
-        # 最後に全体を線形変換して出力
-        out = self.fc_out(out)
-        return out
+        # 最終的な線形変換（デコードや分類用に出力を変換）
+        self.fc_out = nn.Linear(embed_size, input_dim)
 
-class FeedForward(nn.Module):
-    def __init__(self, embed_size, hidden_dim):
-        super(FeedForward, self).__init__()
-        self.fc1 = nn.Linear(embed_size, hidden_dim)
-        self.fc2 = nn.Linear(hidden_dim, embed_size)
-        self.relu = nn.ReLU()
+    def forward(self, src, src_mask=None):
+        # 入力の埋め込み表現を計算
+        src = self.embedding(src)  # (batch_size, seq_length, embed_size)
+        
+        # 位置情報を埋め込みに加算
+        src = self.pos_encoder(src)
+        
+        # Transformer Encoderへの入力
+        encoder_output = self.transformer_encoder(src, src_key_padding_mask=src_mask)
+        
+        # 出力を線形変換して最終結果を取得
+        output = self.fc_out(encoder_output)
+        
+        return output
+
+class PositionalEncoding(nn.Module):
+    def __init__(self, embed_size, dropout=0.1, max_len=5000):
+        super(PositionalEncoding, self).__init__()
+        self.dropout = nn.Dropout(p=dropout)
+
+        # 位置エンコーディング行列を作成
+        pe = torch.zeros(max_len, embed_size)
+        position = torch.arange(0, max_len, dtype=torch.float).unsqueeze(1)
+        div_term = torch.exp(torch.arange(0, embed_size, 2).float() * (-torch.log(torch.tensor(10000.0)) / embed_size))
+        
+        pe[:, 0::2] = torch.sin(position * div_term)  # 偶数インデックス
+        pe[:, 1::2] = torch.cos(position * div_term)  # 奇数インデックス
+        pe = pe.unsqueeze(0).transpose(0, 1)
+        
+        # モデルに登録
+        self.register_buffer('pe', pe)
 
     def forward(self, x):
-        return self.fc2(self.relu(self.fc1(x)))
+        # 埋め込みベクトルに位置情報を加算
+        x = x + self.pe[:x.size(0), :]
+        return self.dropout(x)
 
-class EncoderLayer(nn.Module):
-    def __init__(self, embed_size, heads, hidden_dim, dropout):
-        super(EncoderLayer, self).__init__()
-        self.attention = MultiHeadAttention(embed_size, heads)
-        self.norm1 = nn.LayerNorm(embed_size)
-        self.ffn = FeedForward(embed_size, hidden_dim)
-        self.norm2 = nn.LayerNorm(embed_size)
-        self.dropout = nn.Dropout(dropout)
+# カスタムのcollate関数: パディングを行う
+def collate_fn(batch):
+    # バッチ内のテンソルを同じ長さにパディングする
+    batch = [item for item in batch]
+    return pad_sequence(batch, batch_first=True, padding_value=0)
 
-    def forward(self, x, mask):
-        # マルチヘッドアテンションの適用
-        attn_output = self.attention(x, x, x, mask)
-        x = self.norm1(x + self.dropout(attn_output))
-
-        # フィードフォワードネットワークの適用
-        ffn_output = self.ffn(x)
-        x = self.norm2(x + self.dropout(ffn_output))
-
-        return x
-
-class Encoder(nn.Module):
-    def __init__(self, num_layers, embed_size, heads, hidden_dim, dropout):
-        super(Encoder, self).__init__()
-        self.layers = nn.ModuleList(
-            [EncoderLayer(embed_size, heads, hidden_dim, dropout) for _ in range(num_layers)]
-        )
-        self.dropout = nn.Dropout(dropout)
-
-    def forward(self, x, mask):
-        for layer in self.layers:
-            x = layer(x, mask)
-        return x
-
-class TransformerEncoder(nn.Module):
-    def __init__(self, vocab_size, embed_size, num_layers, heads, hidden_dim, dropout, max_length):
-        super(TransformerEncoder, self).__init__()
-        self.embedding = nn.Embedding(vocab_size, embed_size)
-        self.pos_embedding = nn.Embedding(max_length, embed_size)
-        self.encoder = Encoder(num_layers, embed_size, heads, hidden_dim, dropout)
-        self.dropout = nn.Dropout(dropout)
-
-    def forward(self, x, mask):
-        # 入力の埋め込みと位置埋め込みを加算
-        seq_length = x.shape[1]
-        positions = torch.arange(0, seq_length).unsqueeze(0).expand(x.size(0), seq_length)
-        x = self.dropout(self.embedding(x) + self.pos_embedding(positions))
-
-        # エンコーダーを通して出力を得る
-        out = self.encoder(x, mask)
-        return out
+# カスタムデータセットクラス
+class TextDataset(Dataset):
+    def __init__(self, texts, tokenizer, max_length=256):
+        self.texts = texts
+        self.tokenizer = tokenizer
+        self.max_length = max_length
+    
+    def __len__(self):
+        return len(self.texts)
+    
+    def __getitem__(self, idx):
+        text = self.texts[idx]
+        encoding = self.tokenizer.encode(text)
+        input_ids = torch.tensor(encoding.ids)  # エンコード結果のトークンIDを取得しテンソルに変換
+        return input_ids
 
 if __name__ == "__main__":
+    
+    tokenizer = loadTokenizer()
+    #ハイパーパラメータ
+    input_dim = tokenizer.get_vocab_size() #トークンIDの総数
+    embed_size = 256 #埋め込みベクトルの次元
+    num_heads = 8 #マルチヘッドアテンションのヘッド数
+    hidden_dim = 512 #FeedForward層の隠れ層次元数
+    num_layers  = 6 #Transformerエンコーダーレイヤーの数
+    dropout = 0.1  # ドロップアウト率
+    num_epochs = 10  #エポック数
+
+    #モデル定義
+    model = TransformerEncoderModel(input_dim, embed_size, num_heads, hidden_dim, num_layers, dropout)
+
+    # GPUが使用可能か確認
+    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    # GPUが使用できない場合、メッセージを表示してプログラムを終了
+    if device.type == 'cpu':
+        print("Error: GPU is not available. Please ensure that a GPU is available and CUDA is properly installed.")
+        sys.exit()  # プログラムを終了
+    model.to(device)
+
+    # サンプルデータを生成し、GPUに転送
+    src = torch.randint(0, input_dim, (10, 32)).to(device)  # (シーケンス長, バッチサイズ)
+
+    # マスクは任意（今回は使わない）
+    src_mask = None
+
+    # モデルの出力
+    output = model(src, src_mask)
+
+    print(output.shape)  # (シーケンス長, バッチサイズ, 語彙サイズ)
+
+    # テキストデータをロード
+    all_texts = loadTexts()
+    # データセットのサイズを定義
+    total_size = len(all_texts)
+
+    # トレーニング、検証、テストの分割合計
+    train_ratio = 0.8
+    validation_ratio = 0.1
+    test_ratio = 0.1
+
+    # 分割サイズの計算
+    train_size = int(train_ratio * total_size)
+    validation_size = int(validation_ratio * total_size)
+    test_size = total_size - train_size - validation_size  # 残りをテストに割り当て
+
+    # トークナイザーを使ってテキストをトークン化
+    tokenizer = loadTokenizer()
+
+    # カスタムデータセットを作成
+    full_dataset = TextDataset(all_texts, tokenizer)
+
+    # データセットをランダムに分割
+    train_dataset, validation_dataset, test_dataset = random_split(full_dataset, [train_size, validation_size, test_size])
+
+    # DataLoaderを作成
+    train_dataloader = DataLoader(train_dataset, batch_size=8, shuffle=True, collate_fn=collate_fn)
+    validation_dataloader = DataLoader(validation_dataset, batch_size=8, collate_fn=collate_fn)
+    test_dataloader = DataLoader(test_dataset, batch_size=8, collate_fn=collate_fn)
+
+    # 最適化と損失関数の設定
+    optimizer = optim.Adam(model.parameters(), lr=5e-5)
+    loss_fn = nn.CrossEntropyLoss()
+
+    scaler = GradScaler(device='cuda')
+    # 学習ループ
+    for epoch in range(num_epochs):
+        model.train()
+        total_loss = 0
+        
+        for batch in train_dataloader:
+            # バッチデータをデバイスに転送
+            inputs = batch.to(device)
+            targets = inputs  # 次のトークンを予測するのでターゲットは入力と同じ
+            
+            # 勾配の初期化
+            optimizer.zero_grad()
+            
+            # 自動混合精度での順伝播
+            with autocast(device_type='cuda'):
+                outputs = model(inputs)
+                loss = loss_fn(outputs.view(-1, input_dim), targets.view(-1))
+
+            # 逆伝播とパラメータ更新
+            scaler.scale(loss).backward()
+            scaler.step(optimizer)
+            scaler.update()
+
+        print(f"Epoch [{epoch+1}/{num_epochs}], Loss: {total_loss/len(train_dataloader)}")
+
+    # 検証ループ（評価データセットがあれば使用）
+    model.eval()
+    with torch.no_grad():
+        total_val_loss = 0
+        for batch in validation_dataloader:
+            inputs = batch.to(device)
+            outputs = model(inputs)
+            loss = loss_fn(outputs.view(-1, input_dim), inputs.view(-1))
+            total_val_loss += loss.item()
+
+        print(f"Validation Loss: {total_val_loss/len(validation_dataloader)}")
+
+    # モデルの保存
+    torch.save(model.state_dict(), "transformer_encoder_model.pth")

@@ -1,66 +1,73 @@
-# 分類
-このフォルダではLLMの前提となるTransformerアーキテクチャについてPytorchで実装してみる。
+# 各行の詳細な解説
+import torch
 
-# Transformerとは
+PyTorchのコアライブラリをインポートします。
+import torch.nn as nn
 
-# 関数説明
-### `TransformerLanguageModel`
-モデルの動作を定義するクラス
+ニューラルネットワークのレイヤー定義などを含むtorch.nnモジュールをインポートします。
+class MultiHeadAttention(nn.Module):
 
-### `forward`
-`x`は入力テンソル。
-もちろんです。`TransformerLanguageModel` の `forward` 関数で扱われる入力テンソルには、次のような情報が含まれています。
+nn.Moduleを継承して、マルチヘッドアテンションのクラスを定義します。
+def __init__(self, embed_size, num_heads):
 
-### 入力テンソル `x` の構造
-`x` は `forward` 関数に渡されるモデルの入力テンソルです。このテンソルにはトークン化された文章の系列情報が格納されています。
+コンストラクタメソッドで、埋め込み次元とヘッド数を受け取ります。
+super(MultiHeadAttention, self).__init__()
 
-- **形状**: `[batch_size, seq_length]`
-  - `batch_size`: ミニバッチ内のサンプルの数（通常はモデルの効率的な学習のために複数のサンプルを一度に処理します）。
-  - `seq_length`: それぞれの入力シーケンス（文章）の長さを示します。この長さは、トークン化後のトークン数で表されます。
+親クラスnn.Moduleのコンストラクタを呼び出し、初期化を行います。
+self.embed_size = embed_size
 
-### **具体的な内容と値についての説明**
-入力テンソル `x` のそれぞれの値は、語彙内の単語（またはトークン）を示す整数です。この整数は、単語ごとにユニークなインデックスを持つ語彙（ボキャブラリ）に対応しています。
+埋め込みサイズを保存します（埋め込みサイズは、入力ベクトルの次元数です）。
+self.num_heads = num_heads
 
-たとえば、次のように考えます。
+ヘッド数（マルチヘッドアテンションのヘッド数）を保存します。
+self.head_dim = embed_size // num_heads
 
-- **語彙サイズ `vocab_size = 10000`**: 語彙には10,000個の単語（トークン）があり、それぞれに0から9999までのインデックスが割り当てられています。
-- **入力テンソル `x` の各要素**:
-  - 各要素（インデックス）は、特定の単語を語彙から参照するためのものです。たとえば、インデックスが `5` の場合、語彙の中で `5番目` に対応する単語がその位置に入っています。
+各ヘッドの次元数（head_dim）を計算します。embed_sizeをnum_headsで割ったものです。
+assert embed_size % num_heads == 0
 
-### **入力テンソルの例**
-例えば、以下のようなミニバッチがあったとします：
+embed_sizeがnum_headsで割り切れることを確認します。割り切れないと、各ヘッドの次元が不整合になります。
+self.values = nn.Linear(self.head_dim, self.head_dim, bias=False)
 
-```python
-x = [[4, 15, 6, 20],
-     [7, 9, 0, 0]]
-```
+Valueに対する線形変換を定義します。self.head_dimの次元を持つ値をself.head_dimに変換します。
+self.keys = nn.Linear(self.head_dim, self.head_dim, bias=False)
 
-この場合、
+Keyに対する線形変換を定義します。同様に、self.head_dimの次元を持つキーをself.head_dimに変換します。
+self.queries = nn.Linear(self.head_dim, self.head_dim, bias=False)
 
-- **`batch_size = 2`**（2つのシーケンスが含まれています）。
-- **`seq_length = 4`**（各シーケンスの長さは4トークンです）。
+Queryに対する線形変換を定義します。self.head_dimの次元を持つクエリをself.head_dimに変換します。
+self.fc_out = nn.Linear(num_heads * self.head_dim, embed_size)
 
-### それぞれのシーケンス
-1つ目のシーケンス `[4, 15, 6, 20]`:
-このシーケンスは4つのトークンからなり、それぞれのトークンは語彙の中で特定の単語を示します（例えば、インデックス `4` は語彙中の5番目の単語に対応します）。
-2つ目のシーケンス `[7, 9, 0, 0]`:
-こちらのシーケンスも同様で、後半の `0` はおそらくパディング（シーケンスの長さを統一するために追加される特別なトークン）を示しています。
+最終出力の線形変換を定義します。全てのヘッドを結合した次元をembed_sizeに変換します。
+def forward(self, query, key, value):
 
-### **入力テンソルの処理について**
-1. **`token_embedding` 層**: 
-   - `x` に対して、トークンの埋め込みを行います。
-   - 各トークン（整数）を `embed_size` のベクトルに変換します。この結果、`x` の形状は `[batch_size, seq_length, embed_size]` になります。
+順伝播（フォワード）計算のメソッドを定義します。
+N = query.shape[0]
 
-2. **`position_embedding` 層**:
-   - 各トークンの位置を考慮するため、位置埋め込みを追加します。位置埋め込みは、シーケンス内の各トークンの位置情報を持つベクトルを付加します。
-   - 位置情報も `[batch_size, seq_length, embed_size]` の形状を持ちます。
+バッチサイズ（N）を取得します。queryの最初の次元はバッチサイズです。
+value_len, key_len, query_len = value.shape[1], key.shape[1], query.shape[1]
 
-3. **埋め込みの加算**:
-   - トークン埋め込みと位置埋め込みを足し合わせることで、モデルがトークンの内容とその位置情報の両方を考慮できるようになります。
+Query、Key、Valueのそれぞれの長さを取得します。これらはシーケンスの長さに相当します。
+queries = self.queries(query).view(N, query_len, self.num_heads, self.head_dim)
 
-### **まとめ**
-- **`x` の各値**は、語彙中の単語のインデックスを示す整数です。
-- **埋め込み層で処理されるとき**、これらのインデックスが意味のある連続ベクトルに変換され、モデルが理解しやすい形式でトークン情報を表現します。
-- Transformerはこれらの埋め込みを処理し、系列全体の関係を学習して次のトークンの予測を行います。
+Queryに線形変換を適用し、その後viewでnum_heads個のヘッドに分割します。
+keys = self.keys(key).view(N, key_len, self.num_heads, self.head_dim)
 
-これが入力テンソル `x` の構造と、それぞれの値が意味する内容です。理解の助けになれば幸いです。他に質問があれば教えてください。
+Keyに線形変換を適用し、同様にヘッドに分割します。
+values = self.values(value).view(N, value_len, self.num_heads, self.head_dim)
+
+Valueに線形変換を適用し、ヘッドに分割します。
+energy = torch.einsum("nqhd,nkhd->nhqk", queries, keys)
+
+QueryとKeyのドット積（内積）を計算し、エネルギー行列を生成します。torch.einsumはEinsteinの縮約記法で、効率的に行列積を計算します。
+attention = torch.softmax(energy / (self.embed_size ** (1/2)), dim=3)
+
+エネルギー行列にスケーリングを適用し、ソフトマックスで正規化します。dim=3はアテンションスコアがキーの長さ方向で正規化されることを意味します。
+out = torch.einsum("nhql,nlhd->nqhd", attention, values)
+
+アテンションスコアをValueに掛けて、最終出力を計算します。
+out = self.fc_out(out)
+
+最終出力に対して線形変換を適用し、埋め込みサイズに戻します。
+return out
+
+最終的なアテンションの出力を返します。 
